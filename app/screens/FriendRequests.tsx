@@ -1,23 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   Pressable,
   Alert,
+  FlatList,
   StyleSheet,
 } from "react-native";
 import { apiUrl } from "../config/apiConfig";
 
 export default function FriendRequests() {
-  const [searchUserId, setSearchUserId] = useState<string>(""); // Yeni arkadaşlık isteği için userId
-  const [requestId, setRequestId] = useState<string>(""); // Kontrol edilecek request ID
-  const [requestStatus, setRequestStatus] = useState<string | null>(null); // İsteğin durumu
+  const [searchUserId, setSearchUserId] = useState<string>(""); // User ID for new friend request
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]); // Pending requests
 
-  // Yeni bir arkadaşlık isteği gönder
+  // Fetch pending friend requests from the backend
+  const fetchPendingRequests = async () => {
+    try {
+      const currentUserId = "676e97d8383d346fef2cce56"; // Logged-in user ID
+      const response = await fetch(`${apiUrl}/friends/pending/${currentUserId}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setPendingRequests(data);
+      } else {
+        console.error("Error fetching pending requests:", await response.text());
+      }
+    } catch (error) {
+      console.error("Error fetching pending requests:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingRequests(); // Fetch pending requests when the page loads
+  }, []);
+
+  // Send a new friend request
   const sendFriendRequest = async () => {
     if (!searchUserId) {
-      Alert.alert("Hata", "Lütfen bir kullanıcı ID'si girin.");
+      Alert.alert("Error", "Please enter a user ID.");
       return;
     }
 
@@ -27,141 +48,110 @@ export default function FriendRequests() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ requesterId: "CURRENT_USER_ID", recipientId: searchUserId, status: "PENDING" }), // Backend'e userId ve status gönderilir
+        body: JSON.stringify({
+          requesterId: "676eaf9c383d346fef2cce5d", // Logged-in user ID
+          recipientId: searchUserId,
+          status: "PENDING",
+        }),
       });
 
       if (response.ok) {
-        Alert.alert("Başarılı", "Arkadaşlık isteği gönderildi!");
-        setSearchUserId(""); // Form temizlenir
-      } else if (response.status === 404) {
-        Alert.alert("Hata", "Girilen ID'ye sahip bir kullanıcı bulunamadı.");
+        Alert.alert("Success", "Friend request sent!");
+        setSearchUserId("");
+        fetchPendingRequests(); // Update the list
       } else {
         const errorText = await response.text();
-        console.error("Friend request hatası:", errorText);
-        Alert.alert("Hata", "Arkadaşlık isteği gönderilemedi.");
+        Alert.alert("Error", "Friend request could not be sent: " + errorText);
       }
     } catch (error) {
-      console.error("Hata:", error);
-      Alert.alert("Hata", "Arkadaşlık isteği gönderilirken bir sorun oluştu.");
+      console.error("Error:", error);
+      Alert.alert("Error", "There was an issue sending the friend request.");
     }
   };
 
-  // Request ID ile arkadaşlık isteğini kontrol et
-  const checkFriendRequest = async () => {
-    if (!requestId) {
-      Alert.alert("Hata", "Lütfen bir request ID girin.");
-      return;
-    }
-
-    try {
-      const response = await fetch(`${apiUrl}/friends/pending/${requestId}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRequestStatus(data.status); // İsteğin durumunu kaydet
-        Alert.alert("Başarılı", `İstek Durumu: ${data.status}`);
-      } else if (response.status === 404) {
-        Alert.alert("Hata", "Bu request ID'ye ait bir arkadaşlık isteği bulunamadı.");
-      } else {
-        const errorText = await response.text();
-        console.error("Check request hatası:", errorText);
-        Alert.alert("Hata", "Arkadaşlık isteği kontrol edilemedi.");
-      }
-    } catch (error) {
-      console.error("Hata:", error);
-      Alert.alert("Hata", "Arkadaşlık isteği kontrol edilirken bir sorun oluştu.");
-    }
-  };
-
-  // İsteği kabul et
-  const acceptFriendRequest = async () => {
-    if (!requestId) {
-      Alert.alert("Hata", "Kabul edilecek bir request ID yok.");
-      return;
-    }
-
+  // Accept a friend request
+  const acceptFriendRequest = async (requestId: string) => {
     try {
       const response = await fetch(`${apiUrl}/friends/accept/${requestId}`, {
         method: "POST",
       });
 
       if (response.ok) {
-        Alert.alert("Başarılı", "Arkadaşlık isteği kabul edildi!");
-        setRequestStatus("ACCEPTED"); // Durumu güncelle
+        Alert.alert("Success", "Friend request accepted!");
+        fetchPendingRequests(); // Update the list
       } else {
-        Alert.alert("Hata", "İstek kabul edilemedi.");
+        const errorText = await response.text();
+        console.error("Error accepting request:", errorText);
+        Alert.alert("Error", "Request could not be accepted.");
       }
     } catch (error) {
-      console.error("Hata:", error);
-      Alert.alert("Hata", "İstek kabul edilirken bir sorun oluştu.");
+      console.error("Error:", error);
+      Alert.alert("Error", "There was an issue accepting the request.");
     }
   };
 
-  // İsteği reddet
-  const rejectFriendRequest = async () => {
-    if (!requestId) {
-      Alert.alert("Hata", "Reddedilecek bir request ID yok.");
-      return;
-    }
-
+  // Reject a friend request
+  const rejectFriendRequest = async (requestId: string) => {
     try {
       const response = await fetch(`${apiUrl}/friends/reject/${requestId}`, {
         method: "POST",
       });
 
       if (response.ok) {
-        Alert.alert("Başarılı", "Arkadaşlık isteği reddedildi!");
-        setRequestStatus("REJECTED"); // Durumu güncelle
+        Alert.alert("Success", "Friend request rejected!");
+        fetchPendingRequests(); // Update the list
       } else {
-        Alert.alert("Hata", "İstek reddedilemedi.");
+        const errorText = await response.text();
+        console.error("Error rejecting request:", errorText);
+        Alert.alert("Error", "Request could not be rejected.");
       }
     } catch (error) {
-      console.error("Hata:", error);
-      Alert.alert("Hata", "İstek reddedilirken bir sorun oluştu.");
+      console.error("Error:", error);
+      Alert.alert("Error", "There was an issue rejecting the request.");
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* Yeni arkadaşlık isteği gönderme */}
-      <Text style={styles.header}>Arkadaşlık İsteği Gönder</Text>
+      {/* Send a new friend request */}
+      <Text style={styles.header}>Send Friend Request</Text>
       <TextInput
         style={styles.input}
-        placeholder="User ID girin"
+        placeholder="Enter User ID"
         value={searchUserId}
         onChangeText={setSearchUserId}
       />
       <Pressable style={styles.button} onPress={sendFriendRequest}>
-        <Text style={styles.buttonText}>Arkadaşlık İsteği Gönder</Text>
+        <Text style={styles.buttonText}>Send Friend Request</Text>
       </Pressable>
 
-      {/* Request ID ile kontrol ve yönetim */}
-      <Text style={styles.header}>Request ID ile Kontrol</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Request ID girin"
-        value={requestId}
-        onChangeText={setRequestId}
+      {/* Display pending friend requests */}
+      <Text style={styles.header}>Pending Friend Requests</Text>
+      <FlatList
+        data={pendingRequests}
+        keyExtractor={(item) => item._id || item.id} // Use _id if it exists
+        renderItem={({ item }) => (
+          <View style={styles.requestItem}>
+            <Text>
+              Request ID: {item._id || item.id}, From: {item.requesterId}
+            </Text>
+            <View style={styles.actions}>
+              <Pressable
+                style={styles.acceptButton}
+                onPress={() => acceptFriendRequest(item._id || item.id)}
+              >
+                <Text style={styles.buttonText}>Accept</Text>
+              </Pressable>
+              <Pressable
+                style={styles.rejectButton}
+                onPress={() => rejectFriendRequest(item._id || item.id)}
+              >
+                <Text style={styles.buttonText}>Reject</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       />
-      <Pressable style={styles.button} onPress={checkFriendRequest}>
-        <Text style={styles.buttonText}>Arkadaşlık İsteğini Kontrol Et</Text>
-      </Pressable>
-      {requestStatus && (
-        <View>
-          <Text>İstek Durumu: {requestStatus}</Text>
-          <Pressable style={styles.acceptButton} onPress={acceptFriendRequest}>
-            <Text style={styles.buttonText}>Kabul Et</Text>
-          </Pressable>
-          <Pressable style={styles.rejectButton} onPress={rejectFriendRequest}>
-            <Text style={styles.buttonText}>Reddet</Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -191,22 +181,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+  requestItem: {
+    padding: 10,
+    marginVertical: 5,
+    borderWidth: 1,
+    borderColor: "gray",
+    borderRadius: 5,
+    backgroundColor: "#f9f9f9",
+  },
+  actions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
   acceptButton: {
     backgroundColor: "green",
     padding: 10,
     borderRadius: 5,
-    alignItems: "center",
-    marginBottom: 10,
   },
   rejectButton: {
     backgroundColor: "red",
     padding: 10,
     borderRadius: 5,
-    alignItems: "center",
-    marginBottom: 10,
   },
   buttonText: {
     color: "white",
-    fontSize: 16,
   },
 });
